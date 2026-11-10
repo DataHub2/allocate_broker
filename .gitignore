@@ -227,3 +227,5 @@ next-env.d.ts
 node_modules/
 .env.local
 .claude/
+# The Python template above ignores lib/, which is where this app keeps its code.
+!/src/lib/

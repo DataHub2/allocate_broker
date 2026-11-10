@@ -28,3 +28,12 @@ describe("sparade nycklar", () => {
     expect(await deepSeekKey(db)).toBeNull();
   });
 });
+
+describe("databasadress", async () => {
+  const { databaseUrl } = await import("@/lib/db");
+  it("drops integration markers that Postgres would reject", () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("POSTGRES_URL", "postgres://u:p@host:6543/postgres?sslmode=require&supa=base-pooler.x");
+    expect(databaseUrl()).toBe("postgres://u:p@host:6543/postgres?sslmode=require");
+  });
+});

@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Allocate
+.data/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+node_modules/
+.env.local
+.claude/

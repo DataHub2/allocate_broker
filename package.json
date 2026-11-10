@@ -1,0 +1,32 @@
+{
+  "name": "allocate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:live": "vitest run --config vitest.live.config.ts --silent=false --disable-console-intercept"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite-socket": "^0.2.19",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
+    "@electric-sql/pglite": "^0.5.16",
+    "next": "^16.4.5",
+    "openai": "^7.54.0",
+    "postgres": "^4.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  }
+}

@@ -64,12 +64,13 @@ branschkunskap och ska stämmas av med riktiga hantverkare.
 
 ## Formspråk
 
-Mörk genomskärning av ett hus över hela första skärmen, där rör och kablar löper som
-ledningsbanor. Natt `#13232E`, papper `#F3F4F1`, måttband `#F5C518`, koppar `#D9954F`.
-Typsnitt: Big Shoulders Stencil och Big Shoulders för rubriker, Source Serif 4 för text, Caveat för platschefens handskrivna anteckningar.
+Ljust och stilrent med stora foton av färdiga rum. Kol `#1D2124`, sten `#EEEFEC`,
+ek `#C29563` som accent och mörk ek `#7E5A35` för text i accentfärg.
+Typsnitt: Big Shoulders i versaler för rubriker, Albert Sans för text.
 
-Startsidan lever: rätt del av huset tänds och hantverkarnas bilar rullar in när kunden skriver.
-Måttband, taklinjer och avsnitt som rör sig vid scroll ger karaktär. Besökaren kan stänga av all rörelse.
+Foton kommer tills vidare från Unsplash, se `src/lib/photos.ts`. De ska bytas mot bilder från riktiga jobb.
+Lite liv: yrkena glider in som etiketter när kunden skriver, och korten för badrum, kök och el
+fyller i rutan. Besökaren kan stänga av all rörelse.
 
 Används inte: eyebrows, kortrutnät, skuggor, scrollanimationer, påhittade siffror eller omdömen.
 

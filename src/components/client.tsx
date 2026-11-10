@@ -8,7 +8,7 @@ import { TRADE_LABEL, type Trade } from "@/lib/job-requirements";
 import type { FileMeta, QuestionRow } from "@/lib/marketplace";
 import { clearDraft, loadDraft, saveDraft, uploadFile } from "@/lib/draft";
 import { detectJob } from "@/lib/detect-job";
-import { HouseSection } from "./house-section";
+import { PHOTOS, photoSrcSet, photoUrl } from "@/lib/photos";
 import { ActionForm, Choice, Field, TextArea, type FormState } from "./forms";
 
 function joinTrades(trades: string[]): string {
@@ -16,23 +16,7 @@ function joinTrades(trades: string[]): string {
   return `${trades.slice(0, -1).join(", ")} och ${trades[trades.length - 1]}`;
 }
 
-function Van({ index, trade }: { index: number; trade: string | undefined }) {
-  // Keeps its label while driving away.
-  const label = useRef(trade);
-  if (trade) label.current = trade;
-  return (
-    <svg className={trade ? "van on" : "van"} style={{ ["--i" as string]: index }} viewBox="0 0 170 84" aria-hidden="true" focusable="false">
-      <g className="van-body">
-        <path d="M30 8h78v10H30z" className="van-ladder" />
-        <path d="M6 66V30c0-7 5-12 12-12h86c5 0 9 2 12 6l20 22 20 6c6 2 9 6 9 12v6c0 3-2 5-5 5H11c-3 0-5-2-5-5Z" className="van-shell" />
-        <path d="M112 26h6l17 20h-23z" className="van-window" />
-        <text x="16" y="52" className="van-label">{label.current}</text>
-      </g>
-      <g className="wheel" style={{ transformOrigin: "42px 68px" }}><circle cx="42" cy="68" r="13" /><path d="M42 57v22M31 68h22" /></g>
-      <g className="wheel" style={{ transformOrigin: "132px 68px" }}><circle cx="132" cy="68" r="13" /><path d="M132 57v22M121 68h22" /></g>
-    </svg>
-  );
-}
+const PREFILL_EVENT = "allocate:prefill";
 
 export function LiveHero({ header }: { header: ReactNode }) {
   const router = useRouter();
@@ -43,6 +27,22 @@ export function LiveHero({ header }: { header: ReactNode }) {
   const input = useRef<HTMLInputElement>(null);
   const id = useId();
   const job = useMemo(() => detectJob(text), [text]);
+
+  useEffect(() => {
+    const prefill = (event: Event) => {
+      const value = (event as CustomEvent<string>).detail;
+      setText((current) => (current.trim() ? current : value));
+      setError(false);
+      requestAnimationFrame(() => {
+        const el = area.current;
+        if (!el) return;
+        el.focus({ preventScroll: true });
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    };
+    addEventListener(PREFILL_EVENT, prefill);
+    return () => removeEventListener(PREFILL_EVENT, prefill);
+  }, []);
 
   function add(files: FileList | null) {
     if (!files) return;
@@ -64,7 +64,8 @@ export function LiveHero({ header }: { header: ReactNode }) {
 
   return (
     <div className="hero dark">
-      <HouseSection zones={job.zones} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="hero-photo" src={photoUrl(PHOTOS.hero, 1600)} srcSet={photoSrcSet(PHOTOS.hero, [800, 1200, 1600, 2200])} sizes="100vw" alt="" fetchPriority="high" />
       {header}
       <main id="innehall" className="wrap hero-body">
         <form onSubmit={submit} noValidate className="hero-form">
@@ -76,7 +77,11 @@ export function LiveHero({ header }: { header: ReactNode }) {
           />
           {error && <p className="field-error on-dark" id={`${id}-e`}>Beskriv jobbet med några ord först.</p>}
           <p className="help on-dark" id={`${id}-h`}>Du får frågor som passar just ditt jobb. Sedan räknar högst tre företag per yrke på det.</p>
-          <p className="hero-guess" aria-live="polite">{job.trades.length ? `Låter som ett jobb för ${joinTrades(job.trades)}` : ""}</p>
+          <div className="trade-chips">
+            <p className="sr-only" aria-live="polite">{job.trades.length ? `Låter som ett jobb för ${joinTrades(job.trades)}` : ""}</p>
+            {job.trades.length > 0 && <span className="chips-label" aria-hidden="true">Låter som ett jobb för</span>}
+            {job.trades.map((trade, i) => <span className="chip" key={trade} style={{ ["--i" as string]: i }} aria-hidden="true">{trade}</span>)}
+          </div>
           {photos.length > 0 && (
             <ul className="thumbs" aria-label="Valda bilder">
               {photos.map((p, i) => (
@@ -95,16 +100,30 @@ export function LiveHero({ header }: { header: ReactNode }) {
           </div>
         </form>
       </main>
-      <div className="road" aria-hidden="true">
-        {[0, 1, 2].map((i) => <Van key={i} index={i} trade={job.trades[i]} />)}
-      </div>
     </div>
+  );
+}
+
+/** Puts a starting sentence in the description box, so a visitor can begin from the kind of job they have. */
+export function PrefillButton({ text, children }: { text: string; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      className="btn btn-secondary"
+      onClick={() => {
+        const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "off";
+        scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
+        dispatchEvent(new CustomEvent(PREFILL_EVENT, { detail: text }));
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
 const MOTION_KEY = "allocate:motion";
 
-/** Reveals sections on scroll, drives the tape measure, and honours the visitor's choice to stop movement. */
+/** Reveals sections on scroll and honours the visitor's choice to stop movement. */
 export function PageMotion() {
   const [paused, setPaused] = useState(false);
 
@@ -123,26 +142,7 @@ export function PageMotion() {
     }, { rootMargin: "0px 0px -12% 0px" });
     document.querySelectorAll("[data-reveal]").forEach((el) => seen.observe(el));
 
-    const tapes = [...document.querySelectorAll<HTMLElement>("[data-tape]")];
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      for (const tape of tapes) {
-        const box = tape.getBoundingClientRect();
-        const progress = Math.max(0, Math.min(1, (innerHeight * 0.75 - box.top) / box.height));
-        tape.style.setProperty("--p", progress.toFixed(3));
-      }
-    };
-    const onScroll = () => { frame ||= requestAnimationFrame(update); };
-    update();
-    addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("resize", onScroll);
-    return () => {
-      seen.disconnect();
-      removeEventListener("scroll", onScroll);
-      removeEventListener("resize", onScroll);
-      cancelAnimationFrame(frame);
-    };
+    return () => seen.disconnect();
   }, []);
 
   function toggle() {

@@ -166,6 +166,9 @@ main.app { padding-bottom: 72px; }
 .field-error { color: var(--signal); font-weight: 600; font-size: 0.95rem; margin-top: 6px; }
 .form-error { background: var(--vit); border-left: 5px solid var(--signal); border-radius: 6px; padding: 14px 16px; font-weight: 600; }
 .form-ok { background: var(--vit); border-left: 5px solid var(--gron); border-radius: 6px; padding: 14px 16px; }
+.copy-link .row { flex-wrap: nowrap; align-items: stretch; }
+.copy-link .row input { flex: 1 1 auto; min-width: 0; font-size: 0.95rem; }
+@media (max-width: 520px) { .copy-link .row { flex-wrap: wrap; } }
 .status { font-size: 0.95rem; color: var(--blyerts); min-height: 1.5em; }
 .choice-options { display: grid; gap: 8px; }
 .choice-option { display: flex; gap: 12px; align-items: center; min-height: 48px; padding: 8px 14px; background: var(--vit); border: 1.5px solid var(--kant); border-radius: 6px; cursor: pointer; font-size: 1rem; transition: border-color 140ms ease, background-color 140ms ease; }

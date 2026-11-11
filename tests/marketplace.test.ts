@@ -6,9 +6,10 @@ import { fakeAi as makeFake } from "@/lib/ai";
 import { isValidOrgNumber, MAX_COMPANIES_PER_TRADE } from "@/lib/matching";
 import { REQUIREMENTS } from "@/lib/job-requirements";
 import {
-  acceptQuote, addFile, cleanPrefill, approveBrief, companyJob, confirmVisit, createCompany, createProject, customerProject, declineQuote,
-  finishQuestions, generateQuestions, NotFound, readFile, requestVisit, saveBasics, setCompanyStatus, submitQuote, UserError, type BasicsInput,
+  acceptQuote, addFile, cleanPrefill, approveBrief, companyInvite, companyJob, confirmVisit, createCompany, createCompanyByAdmin, createProject, customerProject, declineQuote,
+  finishQuestions, generateQuestions, NotFound, readFile, rematchOpenProjects, requestVisit, saveBasics, setCompanyStatus, submitQuote, UserError, type AdminCompanyInput, type BasicsInput,
 } from "@/lib/marketplace";
+import { hashToken, verifyPassword } from "@/lib/passwords";
 
 const ai = fakeAi();
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
@@ -228,5 +229,50 @@ describe("offerter", () => {
     const { id } = await publishedProject();
     const ma = await matchOf(id, a.id);
     await expect(requestVisit(db, a.owner, ma, "2030-01-01T08:00", "")).rejects.toBeInstanceOf(UserError);
+  });
+});
+
+describe("företag som admin lägger till", () => {
+  const input = (over: Partial<AdminCompanyInput> = {}): AdminCompanyInput => ({
+    name: "Testbygg AB", org_number: "556677-8899", contact_name: "Sara Bygg", email: "Sara@Testbygg.se", trades: ["bygg", "vvs"], postal_prefixes: ["12"], el_registration: null, checked: true, ...over,
+  });
+
+  it("approves the company at once and gives a login code instead of a password", async () => {
+    const token = await createCompanyByAdmin(db, input());
+    const [row] = await db.query<{ status: string; email: string; password_hash: string; user_id: string }>(
+      "select c.status, u.email, u.password_hash, u.id as user_id from companies c join users u on u.id = c.owner_id where c.org_number = '5566778899'",
+    );
+    expect(row.status).toBe("approved");
+    expect(row.email).toBe("sara@testbygg.se");
+    expect(await verifyPassword("", row.password_hash)).toBe(false);
+    const [invite] = await db.query<{ user_id: string; days: number }>(
+      "select user_id, extract(day from expires_at - now())::int as days from password_resets where token_hash = $1 and used_at is null", [hashToken(token)],
+    );
+    expect(invite.user_id).toBe(row.user_id);
+    expect(invite.days).toBeGreaterThanOrEqual(13);
+  });
+
+  it("sends waiting jobs to the new company", async () => {
+    const { id } = await publishedProject();
+    await createCompanyByAdmin(db, input());
+    await rematchOpenProjects(db, ai);
+    const [firm] = await db.query<{ id: string }>("select id from companies where org_number = '5566778899'");
+    expect(await matchOf(id, firm.id)).toBeTruthy();
+  });
+
+  it("refuses a second company with the same organisation number or contact", async () => {
+    await createCompanyByAdmin(db, input());
+    await expect(createCompanyByAdmin(db, input({ email: "annan@test.se" }))).rejects.toBeInstanceOf(UserError);
+    await expect(createCompanyByAdmin(db, input({ org_number: "5560360793" }))).rejects.toBeInstanceOf(UserError);
+    const [{ count }] = await db.query<{ count: number }>("select count(*)::int as count from companies");
+    expect(count).toBe(1);
+  });
+
+  it("creates a fresh login link on request", async () => {
+    const first = await createCompanyByAdmin(db, input());
+    const [firm] = await db.query<{ id: string }>("select id from companies where org_number = '5566778899'");
+    const second = await companyInvite(db, firm.id);
+    expect(second).not.toBe(first);
+    await expect(companyInvite(db, "00000000-0000-0000-0000-000000000000")).rejects.toBeInstanceOf(NotFound);
   });
 });

@@ -6,6 +6,37 @@ export interface FormState {
   error?: string;
   message?: string;
   fields?: Record<string, string>;
+  /** A link to hand on, shown with a copy button. */
+  link?: string;
+  /** Empty the fields after success, for forms that add one thing after another. */
+  reset?: boolean;
+}
+
+function CopyLink({ link }: { link: string }) {
+  const id = useId();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="field copy-link">
+      <label htmlFor={id}>Länk att skicka</label>
+      <div className="row">
+        <input id={id} readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              setCopied(true);
+            } catch {
+              document.getElementById(id)?.focus(); // Selects the text so it can be copied by hand.
+            }
+          }}
+        >
+          {copied ? "Kopierad" : "Kopiera länken"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const Context = createContext<FormState>({});
@@ -29,6 +60,7 @@ export function ActionForm({
   useEffect(() => setHydrated(true), []);
 
   useEffect(() => {
+    if (state.reset) ref.current?.reset();
     if (!state.error) return;
     const invalid = ref.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
     (invalid ?? summary.current)?.focus();
@@ -48,6 +80,7 @@ export function ActionForm({
         {children}
         {state.error && <p className="form-error" role="alert" tabIndex={-1} ref={summary}>{state.error}</p>}
         {state.message && <p className="form-ok" role="status">{state.message}</p>}
+        {state.link && <CopyLink key={state.link} link={state.link} />}
         {!hideSubmit && <button type="submit" className={submitClass} disabled={pending || !hydrated}>{pending && pendingText ? "Vänta" : submit}</button>}
         <p className="status" aria-live="polite">{pending ? pendingText : ""}</p>
       </form>

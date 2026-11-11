@@ -4,6 +4,7 @@ import { briefSchema, mergeScope, quoteLines, rotDeduction, scrubBrief, scrubTex
 import type { Db } from "./db";
 import { requirementsFor, TRADES, type JobType, type Requirement, type Trade } from "./job-requirements";
 import { eligibleTrades, isEligible, isValidOrgNumber, MAX_COMPANIES_PER_TRADE, pickCompanies, scoreCompany, type CandidateCompany, type JobForMatching, type ScoredCompany } from "./matching";
+import { hashPassword, hashToken, newToken } from "./passwords";
 
 /** A problem the person can act on. The message is shown as written. */
 export class UserError extends Error {
@@ -762,6 +763,64 @@ export async function listCompanies(db: Db) {
   return db.query<CompanyRow & { email: string; created_at: Date }>(
     "select c.*, u.email from companies c join users u on u.id = c.owner_id order by (c.status = 'pending') desc, c.created_at desc",
   );
+}
+
+/** What the admin fills in for a company they have already spoken to. The rest of the application form is skipped. */
+export const adminCompanySchema = z.object({
+  name: z.string().trim().min(2, "Skriv företagets namn.").max(120),
+  org_number: z.string().trim().refine(isValidOrgNumber, "Organisationsnumret stämmer inte. Kontrollera siffrorna."),
+  contact_name: z.string().trim().min(2, "Skriv kontaktpersonens namn.").max(80),
+  email: z.email("Skriv en giltig e-postadress."),
+  trades: z.array(z.enum(TRADES)).min(1, "Välj minst ett yrke."),
+  postal_prefixes: z.array(z.string().regex(/^\d{2}$/)).min(1, "Ange minst ett område med två siffror, till exempel 11, 12, 13."),
+  el_registration: z.string().trim().max(60).nullable(),
+  checked: z.literal(true, { error: "Bekräfta att du har kontrollerat F-skatt och ansvarsförsäkring." }),
+}).refine((v) => !v.trades.includes("el") || Boolean(v.el_registration), {
+  path: ["el_registration"],
+  message: "Elinstallationsföretag måste ha sitt registreringsnummer hos Elsäkerhetsverket.",
+});
+export type AdminCompanyInput = z.infer<typeof adminCompanySchema>;
+
+/** Long enough for a company to get round to it, unlike a password reset. */
+const INVITE_DAYS = 14;
+
+async function issueInvite(db: Db, userId: string): Promise<string> {
+  const token = newToken();
+  await db.query(`insert into password_resets (token_hash, user_id, expires_at) values ($1, $2, now() + interval '${INVITE_DAYS} days')`, [hashToken(token), userId]);
+  return token;
+}
+
+/**
+ * Adds a company the admin has already vetted. It is approved at once, and the returned code
+ * lets the contact person choose their own password, so the admin never handles it.
+ */
+export async function createCompanyByAdmin(db: Db, input: AdminCompanyInput): Promise<string> {
+  const email = input.email.trim().toLowerCase();
+  const org = input.org_number.replace(/\D/g, "");
+  const placeholder = await hashPassword(newToken()); // Nobody knows it; the contact sets a real one through the invite.
+  return db.tx(async (tx) => {
+    const [taken] = await tx.query("select 1 from companies where org_number = $1", [org]);
+    if (taken) throw new UserError("Det finns redan ett företag med det organisationsnumret.", { org_number: "Det finns redan ett företag med det organisationsnumret." });
+    let [user] = await tx.query<{ id: string }>("select id from users where email = $1", [email]);
+    if (user && (await companyOf(tx, user.id))) throw new UserError("Den e-postadressen hör redan till ett företag.", { email: "Den e-postadressen hör redan till ett företag." });
+    if (!user) {
+      [user] = await tx.query<{ id: string }>("insert into users (email, password_hash, full_name) values ($1, $2, $3) returning id", [email, placeholder, input.contact_name]);
+    }
+    await tx.query(
+      `insert into companies (owner_id, name, org_number, trades, postal_prefixes, el_registration, has_f_skatt, has_insurance, status)
+       values ($1, $2, $3, $4::jsonb, $5::jsonb, $6, true, true, 'approved')`,
+      [user.id, input.name, org, JSON.stringify(input.trades), JSON.stringify(input.postal_prefixes), input.el_registration],
+    );
+    return issueInvite(tx, user.id);
+  });
+}
+
+/** A fresh login link for a company's contact person, for when the first one was lost or has expired. */
+export async function companyInvite(db: Db, companyId: string): Promise<string> {
+  if (!isUuid(companyId)) throw new NotFound();
+  const [company] = await db.query<{ owner_id: string }>("select owner_id from companies where id = $1", [companyId]);
+  if (!company) throw new NotFound();
+  return issueInvite(db, company.owner_id);
 }
 
 export async function setCompanyStatus(db: Db, ai: Ai, companyId: string, status: "approved" | "suspended"): Promise<void> {

@@ -9,8 +9,8 @@ import { getDb } from "@/lib/db";
 import { checkDeepSeekKey, DEEPSEEK_SECRET, setSecret } from "@/lib/settings";
 import { TRADES, type Trade } from "@/lib/job-requirements";
 import {
-  acceptQuote, approveBrief, basicsSchema, companySchema, confirmVisit, createCompany, createProject, declineJob, declineQuote, declineVisit,
-  finishQuestions, generateQuestions, NotFound, quoteSchema, requestVisit, reviseBrief, saveAnswer, saveBasics, saveBriefEdits, setCompanyStatus, submitQuote, switchToQuotes, UserError,
+  acceptQuote, adminCompanySchema, approveBrief, basicsSchema, companyInvite, companySchema, confirmVisit, createCompany, createCompanyByAdmin, createProject, declineJob, declineQuote, declineVisit,
+  finishQuestions, generateQuestions, NotFound, quoteSchema, rematchOpenProjects, requestVisit, reviseBrief, saveAnswer, saveBasics, saveBriefEdits, setCompanyStatus, submitQuote, switchToQuotes, UserError,
 } from "@/lib/marketplace";
 import type { FormState } from "@/components/forms";
 
@@ -72,7 +72,7 @@ export async function newPasswordAction(_: FormState, fd: FormData): Promise<For
     await resetPassword(text(fd, "token"), password.data);
   });
   if (result) return result;
-  redirect("/mina-projekt");
+  redirect(safeNext(fd.get("next")));
 }
 
 export async function createProjectAction(description: string): Promise<{ id?: string; error?: string }> {
@@ -275,6 +275,45 @@ export async function removeAiKeyAction(): Promise<void> {
   await requireAdmin();
   await setSecret(await getDb(), DEEPSEEK_SECRET, null);
   revalidatePath("/admin");
+}
+
+function inviteLink(token: string): string {
+  return `${process.env.SITE_URL ?? "http://localhost:3100"}/nytt-losenord?kod=${token}&valkommen=1`;
+}
+
+export async function addCompanyAction(_: FormState, fd: FormData): Promise<FormState> {
+  await requireAdmin();
+  let token = "";
+  let name = "";
+  const result = await attempt(async () => {
+    const input = adminCompanySchema.parse({
+      name: text(fd, "name"),
+      org_number: text(fd, "org_number"),
+      contact_name: text(fd, "contact_name"),
+      email: text(fd, "email").trim(),
+      trades: fd.getAll("trades").map(String).filter((t): t is Trade => (TRADES as readonly string[]).includes(t)),
+      postal_prefixes: [...new Set(text(fd, "postal_prefixes").split(/[\s,]+/).filter(Boolean))],
+      el_registration: optional(fd, "el_registration"),
+      checked: fd.get("checked") === "ja",
+    });
+    const db = await getDb();
+    token = await createCompanyByAdmin(db, input);
+    name = input.name;
+    await rematchOpenProjects(db, await getAi());
+  });
+  if (result) return result;
+  revalidatePath("/admin");
+  return { message: `${name} är tillagt och godkänt. Skicka länken till kontaktpersonen, så väljer de ett eget lösenord. Länken gäller i 14 dagar och fungerar en gång.`, link: inviteLink(token), reset: true };
+}
+
+export async function companyInviteAction(companyId: string, _: FormState, _fd: FormData): Promise<FormState> {
+  await requireAdmin();
+  let token = "";
+  const result = await attempt(async () => {
+    token = await companyInvite(await getDb(), companyId);
+  });
+  if (result) return result;
+  return { message: "Ny länk skapad. Den gäller i 14 dagar och fungerar en gång.", link: inviteLink(token) };
 }
 
 export async function setCompanyStatusAction(companyId: string, status: "approved" | "suspended"): Promise<void> {

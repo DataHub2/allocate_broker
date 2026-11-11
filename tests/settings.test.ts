@@ -36,4 +36,11 @@ describe("databasadress", async () => {
     vi.stubEnv("POSTGRES_URL", "postgres://u:p@host:6543/postgres?sslmode=require&supa=base-pooler.x");
     expect(databaseUrl()).toBe("postgres://u:p@host:6543/postgres?sslmode=require");
   });
+
+  it("finds the address when the integration was given a prefix", () => {
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("POSTGRES_URL", "");
+    vi.stubEnv("DATABASE_POSTGRES_URL", "postgres://u:p@host:6543/postgres?sslmode=require");
+    expect(databaseUrl()).toBe("postgres://u:p@host:6543/postgres?sslmode=require");
+  });
 });

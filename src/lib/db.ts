@@ -242,9 +242,12 @@ export async function createMemoryDb(): Promise<Db> {
   return wrapPglite(pg as unknown as PgliteLike);
 }
 
-/** DATABASE_URL, or POSTGRES_URL as set by Vercel's database integrations. */
+/**
+ * DATABASE_URL, or the pooled address a Vercel database integration sets:
+ * POSTGRES_URL, or DATABASE_POSTGRES_URL when the integration was given the prefix DATABASE.
+ */
 export function databaseUrl(): string | null {
-  const raw = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  const raw = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL;
   if (!raw) return null;
   // Integrations append their own markers, such as supa=, which Postgres rejects as unknown settings.
   const url = new URL(raw);
@@ -272,7 +275,7 @@ async function connect(): Promise<Db> {
     };
     return wrap(sql as unknown as Runner);
   }
-  if (process.env.NODE_ENV === "production") throw new Error("Databasen är inte kopplad: DATABASE_URL eller POSTGRES_URL saknas");
+  if (process.env.NODE_ENV === "production") throw new Error("Databasen är inte kopplad: DATABASE_URL, POSTGRES_URL eller DATABASE_POSTGRES_URL saknas");
   const { PGlite } = await import("@electric-sql/pglite");
   const dir = join(process.cwd(), ".data");
   mkdirSync(dir, { recursive: true });
